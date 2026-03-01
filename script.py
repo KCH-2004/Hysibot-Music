@@ -39,7 +39,7 @@ def run_bot():
 
     voice_clients = {}
     music_queue = {}
-    ytdl = yt_dlp.YoutubeDL({"format": "bestaudio/best", "noplaylist": True,"username": "oauth2"})
+    ytdl = yt_dlp.YoutubeDL({"format": "bestaudio/best", "noplaylist": True,"cookiefile": "cookies.txt"})
     ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn'}
 
     def addqueue(guild_id):
