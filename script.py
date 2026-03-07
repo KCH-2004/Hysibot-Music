@@ -54,8 +54,34 @@ def run_bot():
 
     def addqueue(guild_id):
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
-            source = music_queue[guild_id].pop(0)
-            voice_clients[guild_id].play(source['sourceAudio'], after=lambda x=None: addqueue(guild_id))
+            asyncio.run_coroutine_threadsafe(play_next(guild_id), client.loop)
+
+    async def play_next(guild_id):
+        if guild_id in music_queue and len(music_queue[guild_id]) > 0:
+            item = music_queue[guild_id].pop(0)
+            web_url = item['web_url']
+            channel = item['channel']
+            titre = item['titreSon']
+            try:
+                tasks = asyncio.get_event_loop()
+                data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(web_url, download=False))
+                if 'entries' in data:
+                    data = data['entries'][0]
+
+                url_video = data.get('url')
+                miniature = data.get('thumbnail')
+                player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
+                voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
+                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
+                if miniature:
+                    embed.set_image(url=miniature)
+                embed.set_footer(text="Musique lancée par la file d'attente")
+                await channel.send(embed=embed)
+            except Exception as e:
+                print(f"Erreur lors de la lecture de la file : {e}")
+                await channel.send(f"❌ Impossible de lire **{titre}**.")
+                addqueue(guild_id)
+
 
     @client.event
     async def on_ready():
