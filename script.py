@@ -43,6 +43,7 @@ def run_bot():
         "format": "bestaudio/best",
         "noplaylist": True,
         "cookiefile": "cookies.txt",
+        "source_address": "0.0.0.0",
         "remote_components": ["ejs:github"],
         "js_runtimes": {
             "bun": {},
