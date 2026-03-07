@@ -130,6 +130,7 @@ def run_bot():
                     return
             except Exception as e:
                 print(f"Erreur connexion : {e}")
+                return
             try:
                     titre_ou_url = " ".join(message.content.split()[1:])
 
