@@ -17,7 +17,7 @@ def run_bot():
     async def setup_hook():
         # Paramètres par défaut d'un serveur Lavalink local
         node = wavelink.Node(
-        uri = "http://127.0.0.1:2333",
+        uri = "http://127.0.0.1:2334",
         password="youshallnotpass",
         identifier = "MAIN_NODE")
         await wavelink.Pool.connect(nodes=[node], client=bot, cache_capacity=100)
