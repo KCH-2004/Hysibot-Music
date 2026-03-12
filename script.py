@@ -72,55 +72,36 @@ def run_bot():
             return await interaction.followup.send("❌ Tu dois être dans un salon vocal !")
 
         player: wavelink.Player = interaction.guild.voice_client
-
         if not player:
             player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
 
-        # NETTOYAGE DE L'URL (pour éviter le doublon dans les logs)
         recherche = recherche.strip()
-        recherche = recherche.replace("ytmsearch:", "")
-        if not recherche.startswith("http"):
-            recherche = f"ytmsearch:{recherche}"
-        else:
-            recherche = recherche.split(' ')[0]
 
         try:
-            # Recherche via Lavalink
-            tracks: wavelink.Search = await wavelink.Playable.search(recherche)
+            # On laisse Wavelink décider du meilleur moteur
+            if "youtube.com" in recherche or "youtu.be" in recherche:
+                # C'est une URL YouTube
+                tracks = await wavelink.Playable.search(recherche)
+            else:
+                # C'est une recherche : on force YouTube Music proprement
+                # Cela évite les doubles "ytmsearch:"
+                tracks = await wavelink.YouTubeMusicTrack.search(recherche)
+
             if not tracks:
                 return await interaction.followup.send("❌ Aucun résultat trouvé.")
 
             track = tracks[0]
-
-            # Gestion de la file d'attente
             await player.queue.put_wait(track)
 
-            # RÉCUPÉRATION DES INFOS POUR L'EMBED (Style Ancien)
-            titre = track.title
-            url_video = track.uri
-            miniature = track.artwork  # Wavelink récupère l'image automatiquement
-            author = interaction.user
-
             if player.playing:
-                # Embed style "Ajouté à la file"
-                embed = discord.Embed(title="✅ Ajouté à la file", description=f"**[{titre}]({url_video})**",
-                                      color=0xf1c40f)
-                if miniature: embed.set_thumbnail(url=miniature)
-                embed.set_footer(text=f"Musique ajouté par {author.display_name}")
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(f"✅ Ajouté à la file : **{track.title}**")
             else:
-                # Lancement de la musique
                 await player.play(player.queue.get())
-                # Embed style "Lecture en cours"
-                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({url_video})**",
-                                      color=0x2ecc71)
-                if miniature: embed.set_image(url=miniature)
-                embed.set_footer(text=f"Musique lancée par {author.display_name}")
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(f"🎶 Lecture en cours : **{track.title}**")
 
         except Exception as e:
             print(f"Erreur Play: {e}")
-            await interaction.followup.send("❌ Problème avec YouTube ou Lavalink.")
+            await interaction.followup.send("❌ Erreur Lavalink. Vérifie les logs.")
 
     @bot.tree.command(name="pause", description="Met en pause l'audio")
     async def pause(interaction: discord.Interaction):
