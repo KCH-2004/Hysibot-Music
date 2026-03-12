@@ -18,7 +18,7 @@ def run_bot():
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
         "noplaylist": True,
-        "cookiefile": "cookies.txt",
+        #"cookiefile": "cookies.txt",
         "source_address": "::0",
         "forceipv6": True,
         "remote_components": ["ejs:github"],
