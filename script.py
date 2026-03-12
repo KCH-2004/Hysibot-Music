@@ -79,7 +79,7 @@ def run_bot():
 
         try:
 
-            tracks = await wavelink.Playable.search(f"scsearch:{recherche}")
+            tracks = await wavelink.Playable.search(recherche, source=wavelink.TrackSource.SoundCloud)
 
             if not tracks:
                 return await interaction.followup.send("❌ Aucun résultat trouvé.")
