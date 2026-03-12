@@ -18,7 +18,9 @@ def run_bot():
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
         "noplaylist": True,
-        "cookiefile": "cookies.txt",
+        #"cookiefile": "cookies.txt",
+        "username":"oauth2",
+        "password":"",
         "source_address": "0.0.0.0",
         "extractor_args":{"youtube":["client=android,ios,tv"]},
         "remote_components": ["ejs:github"],
