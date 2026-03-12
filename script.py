@@ -16,8 +16,11 @@ def run_bot():
     # Fonction pour connecter le bot au serveur Lavalink au démarrage
     async def setup_hook():
         # Paramètres par défaut d'un serveur Lavalink local
-        nodes = [wavelink.Node(uri="http://127.0.0.1:2333", password="youshallnotpass")]
-        await wavelink.Pool.connect(nodes=nodes, client=bot, cache_capacity=100)
+        node = wavelink.Node(
+        uri = "http://127.0.0.1:2333",
+        password="youshallnotpass",
+        identifier = "MAIN_NODE")
+        await wavelink.Pool.connect(nodes=[node], client=bot, cache_capacity=100)
 
     bot.setup_hook = setup_hook
 
@@ -60,56 +63,43 @@ def run_bot():
                     print(f"Le salon est vide sur le serveur {guild.id}, déconnexion...")
                     await player.disconnect()  # Wavelink nettoie tout automatiquement !
 
-    @bot.tree.command(name="play", description="Lance l'audio d'une vidéo YouTube")
+    @bot.tree.command(name="play", description="Lance la musique")
     @app_commands.describe(recherche="Url ou titre")
     async def play(interaction: discord.Interaction, recherche: str):
         await interaction.response.defer()
 
+        # 1. Vérification du salon
         if not interaction.user.voice:
-            return await interaction.followup.send("❌ Tu dois être dans un salon vocal !")
+            return await interaction.followup.send("❌ Tu dois être en vocal !")
 
-        # Récupère le player Lavalink du serveur
+        # 2. Récupération ou création du player
         player: wavelink.Player = interaction.guild.voice_client
 
-        # S'il n'y a pas de player, on connecte le bot
         if not player:
-            try:
-                player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
-            except Exception as e:
-                print(e)
-                return await interaction.followup.send("❌ Impossible de rejoindre ton salon vocal.")
+            # On force la création du player Wavelink
+            player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
+        elif interaction.user.voice.channel != player.channel:
+            # Si le bot est déjà ailleurs, on le déplace
+            await player.move_to(interaction.user.voice.channel)
 
-        # Recherche de la musique via Lavalink
+        # 3. Recherche et lecture
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(recherche)
+            tracks = await wavelink.Playable.search(recherche)
             if not tracks:
-                return await interaction.followup.send("❌ Aucun résultat trouvé.")
+                return await interaction.followup.send("❌ Rien trouvé.")
 
-            track: wavelink.Playable = tracks[0]  # On prend le premier résultat
-
-            # On ajoute à la file d'attente intégrée de Wavelink
+            track = tracks[0]
             await player.queue.put_wait(track)
 
-            embed = discord.Embed(title="🎶 Musique", color=0x2ecc71)
-            embed.set_footer(text=f"Ajouté par {interaction.user.display_name}")
-            if track.artwork:
-                embed.set_thumbnail(url=track.artwork)
-
             if not player.playing:
-                # Si le bot ne joue rien, on lance la musique
-                next_track = player.queue.get()
-                await player.play(next_track)
-                embed.description = f"**Lecture en cours :** [{track.title}]({track.uri})"
+                await player.play(player.queue.get())
+                await interaction.followup.send(f"🎶 En cours : **{track.title}**")
             else:
-                # Sinon c'est juste ajouté à la file
-                embed.color = 0xf1c40f
-                embed.description = f"**Ajouté à la file :** [{track.title}]({track.uri})"
-
-            await interaction.followup.send(embed=embed)
+                await interaction.followup.send(f"✅ Ajouté : **{track.title}**")
 
         except Exception as e:
             print(f"Erreur Play: {e}")
-            await interaction.followup.send("❌ Une erreur est survenue lors de la recherche.")
+            await interaction.followup.send("❌ Erreur lors de la lecture.")
 
     @bot.tree.command(name="pause", description="Met en pause l'audio")
     async def pause(interaction: discord.Interaction):
