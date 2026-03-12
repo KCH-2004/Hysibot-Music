@@ -14,12 +14,19 @@ def run_bot():
 
     # --- Connexion au serveur Lavalink (Nœud Public) ---
     async def setup_hook():
-        node = wavelink.Node(
-            identifier="Public_Node",
-            uri="https://lavalink.oops.wtf:443",
-            password="www.freelavalink.rest"
-        )
-        await wavelink.Pool.connect(nodes=[node], client=bot, cache_capacity=100)
+        nodes = [
+            wavelink.Node(
+                identifier="Kikker",
+                uri="https://lavalink.kikker.dev:443",
+                password="kikker.dev"
+            ),
+            wavelink.Node(
+                identifier="Darren",
+                uri="https://lava.link:443",
+                password="I'm a secret"
+            )
+        ]
+        await wavelink.Pool.connect(nodes=nodes, client=bot, cache_capacity=100)
 
     bot.setup_hook = setup_hook
 
