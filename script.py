@@ -126,13 +126,10 @@ def run_bot():
     @bot.tree.command(name="skip", description="Passe la musique")
     async def skip(interaction: discord.Interaction):
         player: wavelink.Player = interaction.guild.voice_client
-        if player and player.playing:
-            await player.skip(force=True)
-            embed = discord.Embed(title=f"{interaction.user.display_name}", description="A passé la musique ⏭️",
-                                  color=0x9b59b6)
-            await interaction.response.send_message(embed=embed)
-        else:
-            await interaction.response.send_message("❌ Rien à passer.", ephemeral=True)
+        if not player or not player.playing:
+            return await interaction.response.send_message("❌ Rien à passer.", ephemeral=True)
+        await player.stop()
+        await interaction.response.send_message(f"⏭️ **{interaction.user.display_name}** a passé la musique.")
 
     @bot.tree.command(name="playlist", description="Affiche la playlist")
     async def playlist(interaction: discord.Interaction):
