@@ -63,43 +63,59 @@ def run_bot():
                     print(f"Le salon est vide sur le serveur {guild.id}, déconnexion...")
                     await player.disconnect()  # Wavelink nettoie tout automatiquement !
 
-    @bot.tree.command(name="play", description="Lance la musique")
+    @bot.tree.command(name="play", description="Lance l'audio d'une vidéo YouTube")
     @app_commands.describe(recherche="Url ou titre")
     async def play(interaction: discord.Interaction, recherche: str):
         await interaction.response.defer()
 
-        # 1. Vérification du salon
         if not interaction.user.voice:
-            return await interaction.followup.send("❌ Tu dois être en vocal !")
+            return await interaction.followup.send("❌ Tu dois être dans un salon vocal !")
 
-        # 2. Récupération ou création du player
         player: wavelink.Player = interaction.guild.voice_client
 
         if not player:
-            # On force la création du player Wavelink
             player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
-        elif interaction.user.voice.channel != player.channel:
-            # Si le bot est déjà ailleurs, on le déplace
-            await player.move_to(interaction.user.voice.channel)
 
-        # 3. Recherche et lecture
+        # NETTOYAGE DE L'URL (pour éviter le doublon dans les logs)
+        recherche = recherche.split(' ')[0]
+
         try:
-            tracks = await wavelink.Playable.search(recherche)
+            # Recherche via Lavalink
+            tracks: wavelink.Search = await wavelink.Playable.search(recherche)
             if not tracks:
-                return await interaction.followup.send("❌ Rien trouvé.")
+                return await interaction.followup.send("❌ Aucun résultat trouvé.")
 
             track = tracks[0]
+
+            # Gestion de la file d'attente
             await player.queue.put_wait(track)
 
-            if not player.playing:
-                await player.play(player.queue.get())
-                await interaction.followup.send(f"🎶 En cours : **{track.title}**")
+            # RÉCUPÉRATION DES INFOS POUR L'EMBED (Style Ancien)
+            titre = track.title
+            url_video = track.uri
+            miniature = track.artwork  # Wavelink récupère l'image automatiquement
+            author = interaction.user
+
+            if player.playing:
+                # Embed style "Ajouté à la file"
+                embed = discord.Embed(title="✅ Ajouté à la file", description=f"**[{titre}]({url_video})**",
+                                      color=0xf1c40f)
+                if miniature: embed.set_thumbnail(url=miniature)
+                embed.set_footer(text=f"Musique ajouté par {author.display_name}")
+                await interaction.followup.send(embed=embed)
             else:
-                await interaction.followup.send(f"✅ Ajouté : **{track.title}**")
+                # Lancement de la musique
+                await player.play(player.queue.get())
+                # Embed style "Lecture en cours"
+                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({url_video})**",
+                                      color=0x2ecc71)
+                if miniature: embed.set_image(url=miniature)
+                embed.set_footer(text=f"Musique lancée par {author.display_name}")
+                await interaction.followup.send(embed=embed)
 
         except Exception as e:
             print(f"Erreur Play: {e}")
-            await interaction.followup.send("❌ Erreur lors de la lecture.")
+            await interaction.followup.send("❌ Problème avec YouTube ou Lavalink.")
 
     @bot.tree.command(name="pause", description="Met en pause l'audio")
     async def pause(interaction: discord.Interaction):
