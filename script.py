@@ -19,7 +19,8 @@ def run_bot():
         "format": "bestaudio/best",
         "noplaylist": True,
         "cookiefile": "cookies.txt",
-        "source_address": "0.0.0.0",
+        "source_address": "::0",
+        "forceipv6": True,
         "remote_components": ["ejs:github"],
         "js_runtimes": {
             "bun": {},
