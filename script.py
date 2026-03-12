@@ -77,7 +77,10 @@ def run_bot():
             player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
 
         # NETTOYAGE DE L'URL (pour éviter le doublon dans les logs)
-        recherche = recherche.split(' ')[0]
+        if not recherche.startswith("http"):
+            recherche = f"ytmsearch:{recherche}"
+        else:
+            recherche = recherche.split(' ')[0]
 
         try:
             # Recherche via Lavalink
