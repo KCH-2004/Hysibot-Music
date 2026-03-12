@@ -22,6 +22,7 @@ def run_bot():
         "source_address": "0.0.0.0",
         "remote_components": ["ejs:github"],
         "js_runtimes": {
+            "deno:": {},
             "bun": {},
             "node": {}
         }
