@@ -78,7 +78,8 @@ def run_bot():
 
         # NETTOYAGE DE L'URL (pour éviter le doublon dans les logs)
         if not recherche.startswith("http"):
-            recherche = f"ytmsearch:{recherche}"
+            if not recherche.startswith("ytmsearch:"):
+                recherche = f"ytmsearch:{recherche}"
         else:
             recherche = recherche.split(' ')[0]
 
