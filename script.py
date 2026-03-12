@@ -18,12 +18,10 @@ def run_bot():
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
         "noplaylist": True,
-        #"cookiefile": "cookies.txt",
+        "cookiefile": "cookies.txt",
         "source_address": "0.0.0.0",
-        "extractor_args":{"youtube":["client=android,ios,tv"]},
         "remote_components": ["ejs:github"],
         "js_runtimes": {
-            "deno:": {},
             "bun": {},
             "node": {}
         }
@@ -234,4 +232,5 @@ def run_bot():
                 await interaction.response.send_message(embed=embed)
             except Exception as e:
                 print(e)
+
     bot.run(token)
