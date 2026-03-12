@@ -75,40 +75,27 @@ def run_bot():
         if not player:
             player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
 
-        # 1. NETTOYAGE : On enlève les préfixes manuels pour éviter les doublons
-        query = recherche.strip().replace("ytmsearch:", "").replace("ytsearch:", "")
+        recherche = recherche.strip()
 
         try:
-            # 2. RECHERCHE : Wavelink 3.x gère le préfixe via l'argument 'source'
-            if query.startswith("http"):
-                # Si c'est un lien, on cherche normalement
-                tracks = await wavelink.Playable.search(query)
-            else:
-                # Si c'est un titre, on force YouTube Music (le plus stable)
-                tracks = await wavelink.Playable.search(query, source="ytmsearch")
+
+            tracks = await wavelink.Playable.search(f"scsearch:{recherche}")
 
             if not tracks:
                 return await interaction.followup.send("❌ Aucun résultat trouvé.")
 
-            # On récupère la première piste
             track = tracks[0]
-
-            # 3. MISE EN FILE ET LECTURE
             await player.queue.put_wait(track)
 
             if player.playing:
-                embed = discord.Embed(title="✅ Ajouté à la file", description=f"**{track.title}**", color=0xf1c40f)
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(f"✅ Ajouté à la file : **{track.title}**")
             else:
                 await player.play(player.queue.get())
-                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**{track.title}**", color=0x2ecc71)
-                if track.artwork: embed.set_image(url=track.artwork)
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(f"🎶 Lecture en cours : **{track.title}**")
 
         except Exception as e:
-            print(f"DEBUG - Query envoyée à Lavalink : {query}")
-            print(f"Erreur Play : {e}")
-            await interaction.followup.send("❌ Erreur Lavalink. Vérifie les logs de la console.")
+            print(f"Erreur Play: {e}")
+            await interaction.followup.send("❌ Erreur Lavalink. Vérifie les logs.")
 
     @bot.tree.command(name="pause", description="Met en pause l'audio")
     async def pause(interaction: discord.Interaction):
