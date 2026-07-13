@@ -15,6 +15,8 @@ def run_bot():
 
     voice_clients = {}
     music_queue = {}
+    current_song = {}
+
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
 	"noplaylist": True,
@@ -69,15 +71,24 @@ def run_bot():
             print(f"❌ Erreur de synchronisation : {e}")
 
     def addqueue(guild_id):
+        if guild_id in current_song and current_song[guild_id].get('isloop', False):
+            if guild_id not in music_queue:
+                music_queue[guild_id] = []
+
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
             asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop)
+        else:
+            if guild_id in current_song:
+                del current_song[guild_id]
 
     async def play_next(guild_id):
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
             item = music_queue[guild_id].pop(0)
+            current_song[guild_id] = item
             web_url = item['web_url']
             channel = item['channel']
             titre = item['titreSon']
+
             try:
                 tasks = asyncio.get_event_loop()
                 data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(web_url, download=False))
@@ -100,8 +111,8 @@ def run_bot():
 
 
     @bot.tree.command(name="play",description="Lance l'audio d'une vidéo ytb")
-    @app_commands.describe(recherche="Url ou titre")
-    async def play(interaction: discord.Interaction, recherche:str):
+    @app_commands.describe(recherche="Url ou titre",isloop="lecture en boucle ?")
+    async def play(interaction: discord.Interaction, recherche:str, isloop:bool = False):
 
         await interaction.response.defer()
 
@@ -138,12 +149,13 @@ def run_bot():
             if voice_clients[guild_id].is_playing():
                 if guild_id not in music_queue:
                     music_queue[guild_id] = []
-                music_queue[guild_id].append({'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel})
+                music_queue[guild_id].append({'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel, 'isloop': isloop})
                 embed = discord.Embed(title="✅ Ajouté à la file", description=f"**[{titre}]({web_url})**", color=0xf1c40f)
                 embed.set_thumbnail(url=miniature)
                 embed.set_footer(text=f"Musique ajouté par {author.display_name}")
                 await interaction.followup.send(embed=embed)
             else:
+                current_song[guild_id] = {'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel,'isloop': isloop}
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
                 voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
                 embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
@@ -209,6 +221,9 @@ def run_bot():
             if guild_id in music_queue and len(music_queue[guild_id]) > 0:
                 try:
                     Playlist = ""
+                    if guild_id in current_song:
+                        statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
+                        Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
                     for i, Prochains_titre in enumerate(music_queue[guild_id]):
                         Playlist += f"{i + 1}. {Prochains_titre['titreSon']}\n"
                     embed = discord.Embed(
@@ -228,11 +243,44 @@ def run_bot():
         guild_id = interaction.guild_id
         if guild_id in music_queue:
             try:
+                if guild_id in current_song:
+                    current_song[guild_id]['isloop'] = False
                 voice_clients[guild_id].stop()
                 embed = discord.Embed(title=f"{interaction.user.display_name}", description="A passé la musique ⏭️",
                                       color=0x9b59b6)
                 await interaction.response.send_message(embed=embed)
             except Exception as e:
                 print(e)
+
+    @bot.tree.command(name="loop",description="Loop l'audio")
+    async def loop(interaction: discord.Interaction):
+        guild_id = interaction.guild_id
+
+        if guild_id in voice_clients and voice_clients[guild_id].is_playing():
+            if guild_id in current_song:
+                current_song[guild_id]['isloop'] = not current_song[guild_id].get('isloop', False)
+                if current_song[guild_id]['isloop']:
+                    embed = discord.Embed(
+                        title="🔁 Boucle activée",
+                        description=f"La musique **{current_song[guild_id]['titreSon']}** sera répétée en boucle.",
+                        color=0x3498db  # Bleu
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="➡️ Boucle désactivée",
+                        description="La file d'attente reprendra son cours normal à la fin du morceau.",
+                        color=0x95a5a6  # Gris
+                    )
+                await interaction.response.send_message(embed=embed)
+            else:
+                # Sécurité au cas où current_song n'est pas encore initialisé
+                await interaction.response.send_message("❌ Impossible de modifier l'état de la boucle pour le moment.")
+        else:
+            embed = discord.Embed(
+                title="❌ Erreur",
+                description="Il n'y a aucune musique en cours de lecture !",
+                color=0xe74c3c  # Rouge
+            )
+            await interaction.response.send_message(embed=embed)
 
     bot.run(token)
