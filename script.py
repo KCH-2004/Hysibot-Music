@@ -22,7 +22,8 @@ def run_bot():
 	"noplaylist": True,
 	"extractor_args":{"youtube":["player_client=android,web"]},
         "noplaylist": True,
-        "cookiefile": "cookies.txt",
+        #"cookiefile": "cookies.txt",
+        "username": "oauth2",
         "source_address": "0.0.0.0",
         "remote_components": ["ejs:github"],
         "js_runtimes": {
