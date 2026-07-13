@@ -74,6 +74,7 @@ def run_bot():
         if guild_id in current_song and current_song[guild_id].get('isloop', False):
             if guild_id not in music_queue:
                 music_queue[guild_id] = []
+            music_queue[guild_id].insert(0, current_song[guild_id])
 
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
             asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop)
@@ -218,12 +219,12 @@ def run_bot():
     async def playlist(interaction: discord.Interaction):
         guild_id = interaction.guild_id
         if guild_id in voice_clients:
+            Playlist = ""
+            if guild_id in current_song:
+                statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
+                Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
             if guild_id in music_queue and len(music_queue[guild_id]) > 0:
                 try:
-                    Playlist = ""
-                    if guild_id in current_song:
-                        statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
-                        Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
                     for i, Prochains_titre in enumerate(music_queue[guild_id]):
                         Playlist += f"{i + 1}. {Prochains_titre['titreSon']}\n"
                     embed = discord.Embed(
@@ -235,13 +236,13 @@ def run_bot():
                 except Exception as e:
                     print(e)
             else:
-                embed = discord.Embed(title="📭La playist est vide.", color=0x9b59b6)
+                embed = discord.Embed(title="📭La playlist est vide.", color=0x9b59b6)
                 await interaction.response.send_message(embed=embed)
 
     @bot.tree.command(name="skip", description="Passe la musique")
     async def skip(interaction: discord.Interaction):
         guild_id = interaction.guild_id
-        if guild_id in music_queue:
+        if guild_id in voice_clients and voice_clients[guild_id].is_playing():
             try:
                 if guild_id in current_song:
                     current_song[guild_id]['isloop'] = False
