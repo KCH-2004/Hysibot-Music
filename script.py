@@ -225,26 +225,53 @@ def run_bot():
     @bot.tree.command(name="playlist", description="Affiche la playlist")
     async def playlist(interaction: discord.Interaction):
         guild_id = interaction.guild_id
-        if guild_id in voice_clients:
-            if (guild_id in music_queue and len(music_queue[guild_id]) > 0) or guild_id in current_song:
-                try:
-                    Playlist = ""
-                    if guild_id in current_song:
-                        statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
-                        Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
-                    for i, Prochains_titre in enumerate(music_queue[guild_id]):
-                        Playlist += f"{i + 1}. {Prochains_titre['titreSon']}\n"
-                    embed = discord.Embed(
-                        title="📜Playlist :",
-                        description=Playlist,
-                        color=0x9b59b6  # Violet
-                    )
-                    await interaction.response.send_message(embed=embed)
-                except Exception as e:
-                    print(e)
-            else:
-                embed = discord.Embed(title="📭La playlist est vide.", color=0x9b59b6)
+
+        if guild_id not in voice_clients:
+            embed = discord.Embed(title="❌ Erreur", description="Le bot n'est connecté à aucun salon vocal.",
+                                  color=0xe74c3c)
+            await interaction.response.send_message(embed=embed)
+            return
+
+        file_attente = music_queue.get(guild_id, [])
+
+        if guild_id in current_song or len(file_attente) > 0:
+            try:
+                Playlist = ""
+
+                # 1. On affiche la musique actuellement en cours
+                if guild_id in current_song:
+                    est_en_boucle = current_song[guild_id].get('isloop', False)
+                    statut_loop = " 🔁" if est_en_boucle else ""
+                    Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
+
+                # 2. L'ASTUCE ICI : Si la musique boucle, on l'affiche comme la prochaine à venir
+                index_affichage = 1
+                if guild_id in current_song and current_song[guild_id].get('isloop', False):
+                    Playlist += f"**{index_affichage}.** {current_song[guild_id]['titreSon']} 🔁 *(En boucle)*\n"
+                    index_affichage += 1
+
+                # 3. On affiche le reste de la vraie file d'attente
+                if len(file_attente) > 0:
+                    for Prochains_titre in file_attente:
+                        Playlist += f"**{index_affichage}.** {Prochains_titre['titreSon']}\n"
+                        index_affichage += 1
+                elif index_affichage == 1:
+                    # S'il n'y a ni boucle ni musiques en attente
+                    Playlist += "*Aucune musique à suivre.*"
+
+                embed = discord.Embed(
+                    title="📜 Playlist actuelle :",
+                    description=Playlist,
+                    color=0x9b59b6
+                )
                 await interaction.response.send_message(embed=embed)
+
+            except Exception as e:
+                print(f"Erreur d'affichage playlist : {e}")
+                await interaction.response.send_message("❌ Une erreur est survenue lors de l'affichage de la playlist.")
+        else:
+            embed = discord.Embed(title="📭 La playlist est vide.", color=0x9b59b6)
+            await interaction.response.send_message(embed=embed)
 
     @bot.tree.command(name="skip", description="Passe la musique")
     async def skip(interaction: discord.Interaction):
