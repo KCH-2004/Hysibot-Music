@@ -60,6 +60,8 @@ def run_bot():
                         del voice_clients[guild_id]
                         if guild_id in music_queue:
                             music_queue[guild_id].clear()
+                        if guild_id in current_song:
+                            del current_song[guild_id]
 
     @bot.event
     async def on_ready():
@@ -161,7 +163,10 @@ def run_bot():
                 voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
                 embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
                 embed.set_image(url=miniature)
-                embed.set_footer(text=f"Musique lancé par {author.display_name}")
+                if current_song[guild_id]['isloop']:
+                    embed.set_footer(text=f"Musique en boucle 🔁")
+                else:
+                    embed.set_footer(text=f"Musique lancé par {author.display_name}")
                 await interaction.followup.send(embed=embed)
 
         except Exception as e:
@@ -212,6 +217,8 @@ def run_bot():
                 del voice_clients[guild_id]
                 if guild_id in music_queue:
                     music_queue[guild_id].clear()
+                if guild_id in current_song:
+                    del current_song[guild_id]
             except Exception as e:
                 print(e)
 
@@ -219,12 +226,12 @@ def run_bot():
     async def playlist(interaction: discord.Interaction):
         guild_id = interaction.guild_id
         if guild_id in voice_clients:
-            Playlist = ""
-            if guild_id in current_song:
-                statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
-                Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
-            if guild_id in music_queue and len(music_queue[guild_id]) > 0:
+            if (guild_id in music_queue and len(music_queue[guild_id]) > 0) or guild_id in current_song:
                 try:
+                    Playlist = ""
+                    if guild_id in current_song:
+                        statut_loop = " 🔁" if current_song[guild_id].get('isloop', False) else ""
+                        Playlist += f"**En cours :** {current_song[guild_id]['titreSon']}{statut_loop}\n\n**À suivre :**\n"
                     for i, Prochains_titre in enumerate(music_queue[guild_id]):
                         Playlist += f"{i + 1}. {Prochains_titre['titreSon']}\n"
                     embed = discord.Embed(
