@@ -17,6 +17,8 @@ def run_bot():
     music_queue = {}
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
+	"noplaylist": True,
+	"extractor_args":{"youtube":["player_client=android,web"]},
         "noplaylist": True,
         "cookiefile": "cookies.txt",
         "source_address": "0.0.0.0",
