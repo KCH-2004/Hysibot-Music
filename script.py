@@ -54,15 +54,14 @@ def run_bot():
                         print(f"Le salon est vide sur le serveur {guild_id}, déconnexion...")
                         # On arrête la musique en cours s'il y en a une
                         voice_clients[guild_id].stop()
-                        # On déconnecte le bot
-                        await voice_clients[guild_id].disconnect()
-                        # TRÈS IMPORTANT : On nettoie nos dictionnaires pour éviter les bugs à la prochaine connexion
-                        del voice_clients[guild_id]
                         if guild_id in music_queue:
                             music_queue[guild_id].clear()
                         if guild_id in current_song:
                             del current_song[guild_id]
-
+                        # On déconnecte le bot
+                        await voice_clients[guild_id].disconnect()
+                        # TRÈS IMPORTANT : On nettoie nos dictionnaires pour éviter les bugs à la prochaine connexion
+                        del voice_clients[guild_id]
     @bot.event
     async def on_ready():
         print(f'✅ {bot.user} est connecté à Discord !')
@@ -211,14 +210,14 @@ def run_bot():
         if guild_id in voice_clients:
             try:
                 voice_clients[guild_id].stop()
-                embed = discord.Embed(description="👋 **À demain**", color=0x95a5a6)
-                await interaction.response.send_message(embed=embed)
-                await voice_clients[guild_id].disconnect()
-                del voice_clients[guild_id]
                 if guild_id in music_queue:
                     music_queue[guild_id].clear()
                 if guild_id in current_song:
                     del current_song[guild_id]
+                embed = discord.Embed(description="👋 **À demain**", color=0x95a5a6)
+                await interaction.response.send_message(embed=embed)
+                await voice_clients[guild_id].disconnect()
+                del voice_clients[guild_id]
             except Exception as e:
                 print(e)
 
