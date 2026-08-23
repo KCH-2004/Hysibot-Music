@@ -19,8 +19,8 @@ def run_bot():
 
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
-	"noplaylist": True,
-	"extractor_args":{"youtube":["player_client=android,web"]},
+	    "noplaylist": True,
+	    "extractor_args":{"youtube":["player_client=android,web"]},
         "noplaylist": True,
         "cookiefile": "cookies.txt",
         "source_address": "0.0.0.0",
@@ -106,9 +106,12 @@ def run_bot():
                     embed.set_image(url=miniature)
                 await channel.send(embed=embed)
             except Exception as e:
-                print(f"Erreur lors de la lecture de la file : {e}")
-                await channel.send(f"❌ Impossible de lire **{titre}**.")
-                addqueue(guild_id)
+                if guild_id in voice_clients and voice_clients[guild_id].is_connected():
+                    print(f"Erreur lors de la lecture de la file : {e}")
+                    await channel.send(f"❌ Impossible de lire **{titre}**.")
+                    addqueue(guild_id)
+                else:
+                    del voice_clients[guild_id]
 
 
 
