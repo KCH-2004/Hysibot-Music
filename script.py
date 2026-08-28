@@ -158,7 +158,8 @@ def run_bot():
                 embed = discord.Embed(title="✅ Ajouté à la file", description=f"**[{titre}]({web_url})**", color=0xf1c40f)
                 embed.set_thumbnail(url=miniature)
                 embed.set_footer(text=f"Musique ajouté par {author.display_name}")
-                await interaction.followup.send(embed=embed)
+                if not isloop:
+                    await interaction.followup.send(embed=embed)
             else:
                 current_song[guild_id] = {'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel,'isloop': isloop}
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
