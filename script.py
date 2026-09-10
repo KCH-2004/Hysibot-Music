@@ -75,7 +75,6 @@ def run_bot():
         if guild_id in current_song and current_song[guild_id].get('isloop', False):
             if guild_id not in music_queue:
                 music_queue[guild_id] = []
-            current_song[guild_id]['is_repeating'] = True
             music_queue[guild_id].insert(0, current_song[guild_id])
 
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
@@ -86,8 +85,6 @@ def run_bot():
 
     async def play_next(guild_id):
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
-            if guild_id in voice_clients and voice_clients[guild_id].is_playing():
-                return
             item = music_queue[guild_id].pop(0)
             current_song[guild_id] = item
             web_url = item['web_url']
@@ -104,26 +101,21 @@ def run_bot():
                 miniature = data.get('thumbnail')
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
                 voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
-                if not item.get('is_repeating',False):
-                    embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
+                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
                 if miniature:
                     embed.set_image(url=miniature)
                 await channel.send(embed=embed)
             except Exception as e:
-                if not voice_clients[guild_id].is_playing():
+                if guild_id in voice_clients and voice_clients[guild_id].is_connected():
+                    print(f"Erreur lors de la lecture de la file : {e}")
                     await channel.send(f"❌ Impossible de lire **{titre}**.")
-                    if guild_id in current_song:
-                        current_song[guild_id]['isloop'] = False
-                    await asyncio.sleep(1)
                     addqueue(guild_id)
                 else:
                     del voice_clients[guild_id]
 
-
-
-    @bot.tree.command(name="play",description="Lance l'audio d'une vidéo ytb")
-    @app_commands.describe(recherche="Url ou titre",isloop="lecture en boucle ?")
-    async def play(interaction: discord.Interaction, recherche:str, isloop:bool = False):
+    @bot.tree.command(name="play", description="Lance l'audio d'une vidéo ytb")
+    @app_commands.describe(recherche="Url ou titre", isloop="lecture en boucle ?")
+    async def play(interaction: discord.Interaction, recherche: str, isloop: bool = False):
 
         await interaction.response.defer()
 
@@ -145,7 +137,6 @@ def run_bot():
         try:
             if not validators.url(recherche):
                 recherche = f"ytsearch:{recherche}"
-
             tasks = asyncio.get_event_loop()
             data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(recherche, download=False))
 
