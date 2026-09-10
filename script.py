@@ -75,6 +75,7 @@ def run_bot():
         if guild_id in current_song and current_song[guild_id].get('isloop', False):
             if guild_id not in music_queue:
                 music_queue[guild_id] = []
+            current_song[guild_id]['is_repeating'] = True
             music_queue[guild_id].insert(0, current_song[guild_id])
 
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
@@ -101,7 +102,8 @@ def run_bot():
                 miniature = data.get('thumbnail')
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
                 voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
-                embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
+                if not item.get('is_repeating',False):
+                    embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
                 if miniature:
                     embed.set_image(url=miniature)
                 await channel.send(embed=embed)
@@ -158,8 +160,7 @@ def run_bot():
                 embed = discord.Embed(title="✅ Ajouté à la file", description=f"**[{titre}]({web_url})**", color=0xf1c40f)
                 embed.set_thumbnail(url=miniature)
                 embed.set_footer(text=f"Musique ajouté par {author.display_name}")
-                if not isloop:
-                    await interaction.followup.send(embed=embed)
+                await interaction.followup.send(embed=embed)
             else:
                 current_song[guild_id] = {'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel,'isloop': isloop}
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
