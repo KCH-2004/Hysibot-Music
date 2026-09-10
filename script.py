@@ -86,6 +86,8 @@ def run_bot():
 
     async def play_next(guild_id):
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
+            if guild_id in voice_clients and voice_clients[guild_id].is_playing():
+                return
             item = music_queue[guild_id].pop(0)
             current_song[guild_id] = item
             web_url = item['web_url']
@@ -108,9 +110,11 @@ def run_bot():
                     embed.set_image(url=miniature)
                 await channel.send(embed=embed)
             except Exception as e:
-                if guild_id in voice_clients and voice_clients[guild_id].is_connected():
-                    print(f"Erreur lors de la lecture de la file : {e}")
+                if not voice_clients[guild_id].is_playing():
                     await channel.send(f"❌ Impossible de lire **{titre}**.")
+                    if guild_id in current_song:
+                        current_song[guild_id]['isloop'] = False
+                    await asyncio.sleep(1)
                     addqueue(guild_id)
                 else:
                     del voice_clients[guild_id]
