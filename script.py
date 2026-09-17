@@ -1,5 +1,6 @@
 import discord
 import os
+import random
 import asyncio
 import yt_dlp
 import validators
@@ -16,11 +17,12 @@ def run_bot():
     voice_clients = {}
     music_queue = {}
     current_song = {}
+    prefetching = {}  # évite de lancer 2 préchargements en parallèle sur le même serveur
 
     ytdl = yt_dlp.YoutubeDL({
         "format": "bestaudio/best",
 	    "noplaylist": True,
-	    "extractor_args":{"youtube":["player_client=android,web"]},
+	    "extractor_args":{"youtube":["player_client=web,android,ios"]},
         "noplaylist": True,
         "cookiefile": "cookies.txt",
         "source_address": "0.0.0.0",
@@ -30,6 +32,14 @@ def run_bot():
             "node": {}
         }
     })
+
+    # Instance dédiée pour scraper une playlist rapidement (sans extraire les flux audio)
+    ytdl_flat = yt_dlp.YoutubeDL({
+        "extract_flat": True,
+        "skip_download": True,
+        "cookiefile": "cookies.txt",
+    })
+
     ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
     @bot.event
@@ -75,6 +85,10 @@ def run_bot():
         if guild_id in current_song and current_song[guild_id].get('isloop', False):
             if guild_id not in music_queue:
                 music_queue[guild_id] = []
+            # On efface le flux préchargé : une URL de flux YouTube ne doit pas être
+            # rejouée telle quelle, on force une nouvelle résolution pour la boucle
+            current_song[guild_id].pop('url_video', None)
+            current_song[guild_id].pop('miniature', None)
             music_queue[guild_id].insert(0, current_song[guild_id])
 
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
@@ -82,6 +96,41 @@ def run_bot():
         else:
             if guild_id in current_song:
                 del current_song[guild_id]
+
+    def schedule_prefetch(guild_id):
+        # Peut être appelé depuis du code sync (ex: callback "after" d'FFmpeg) ou async
+        asyncio.run_coroutine_threadsafe(prefetch_next(guild_id), bot.loop)
+
+    async def prefetch_next(guild_id):
+        # Résout à l'avance le flux audio du PROCHAIN titre de la file, pendant
+        # que le titre actuel joue, pour éliminer le délai d'extraction au moment
+        # de l'enchaînement (transition quasi instantanée entre les titres).
+        if prefetching.get(guild_id, False):
+            return  # un préchargement est déjà en cours pour ce serveur
+
+        if guild_id not in music_queue or len(music_queue[guild_id]) == 0:
+            return
+
+        item = music_queue[guild_id][0]
+
+        if item.get('url_video'):
+            return  # déjà préchargé
+
+        prefetching[guild_id] = True
+        try:
+            tasks = asyncio.get_event_loop()
+            data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(item['web_url'], download=False))
+            if 'entries' in data:
+                data = data['entries'][0]
+
+            # On vérifie que l'item est toujours en tête de file (pas de skip entre temps)
+            if guild_id in music_queue and len(music_queue[guild_id]) > 0 and music_queue[guild_id][0] is item:
+                item['url_video'] = data.get('url')
+                item['miniature'] = data.get('thumbnail')
+        except Exception as e:
+            print(f"Erreur de préchargement : {e}")
+        finally:
+            prefetching[guild_id] = False
 
     async def play_next(guild_id):
         if guild_id in music_queue and len(music_queue[guild_id]) > 0:
@@ -92,19 +141,28 @@ def run_bot():
             titre = item['titreSon']
 
             try:
-                tasks = asyncio.get_event_loop()
-                data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(web_url, download=False))
-                if 'entries' in data:
-                    data = data['entries'][0]
+                # Si le titre a déjà été préchargé en arrière-plan, on saute l'extraction
+                if item.get('url_video'):
+                    url_video = item['url_video']
+                    miniature = item.get('miniature')
+                else:
+                    tasks = asyncio.get_event_loop()
+                    data = await tasks.run_in_executor(None, lambda: ytdl.extract_info(web_url, download=False))
+                    if 'entries' in data:
+                        data = data['entries'][0]
 
-                url_video = data.get('url')
-                miniature = data.get('thumbnail')
+                    url_video = data.get('url')
+                    miniature = data.get('thumbnail')
+
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
                 voice_clients[guild_id].play(player, after=lambda x=None: addqueue(guild_id))
                 embed = discord.Embed(title="🎶 Lecture en cours", description=f"**[{titre}]({web_url})**", color=0x2ecc71)
                 if miniature:
                     embed.set_image(url=miniature)
                 await channel.send(embed=embed)
+
+                # On lance déjà le préchargement du titre suivant pendant que celui-ci joue
+                schedule_prefetch(guild_id)
             except Exception as e:
                 if guild_id in voice_clients and voice_clients[guild_id].is_connected():
                     print(f"Erreur lors de la lecture de la file : {e}")
@@ -156,6 +214,8 @@ def run_bot():
                 embed.set_thumbnail(url=miniature)
                 embed.set_footer(text=f"Musique ajouté par {author.display_name}")
                 await interaction.followup.send(embed=embed)
+                # Si c'est le seul titre en file, on peut déjà le précharger en arrière-plan
+                schedule_prefetch(guild_id)
             else:
                 current_song[guild_id] = {'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel,'isloop': isloop}
                 player = discord.FFmpegPCMAudio(url_video, **ffmpeg_options)
@@ -171,6 +231,90 @@ def run_bot():
         except Exception as e:
             print(e)
             embed = discord.Embed(title="❌ Erreur", description="Lien invalide ou problème YouTube.", color=0xe74c3c)
+            await interaction.followup.send(embed=embed)
+
+    @bot.tree.command(name="loadplaylist", description="Charge une playlist et joue des titres aléatoires")
+    @app_commands.describe(lien="Url de la playlist", nombre="Nombre de titres aléatoires à jouer (max 10)")
+    async def loadplaylist(interaction: discord.Interaction, lien: str, nombre: app_commands.Range[int, 1, 10]):
+
+        await interaction.response.defer()
+
+        if not interaction.user.voice:
+            await interaction.followup.send("❌ Tu dois être dans un salon vocal !")
+            return
+
+        if not validators.url(lien):
+            await interaction.followup.send("❌ Merci de fournir un lien de playlist valide.")
+            return
+
+        guild_id = interaction.guild_id
+        author = interaction.user
+
+        if guild_id not in voice_clients or not voice_clients[guild_id].is_connected():
+            try:
+                voice_clients[guild_id] = await interaction.user.voice.channel.connect()
+            except Exception as e:
+                print(f"Erreur connexion vocale : {e}")
+                await interaction.followup.send("❌ Impossible de rejoindre ton salon vocal.")
+                return
+
+        try:
+            # extract_flat permet de récupérer la liste des titres sans extraire
+            # les flux audio de chaque vidéo (beaucoup plus rapide sur une grosse playlist)
+            tasks = asyncio.get_event_loop()
+            data = await tasks.run_in_executor(None, lambda: ytdl_flat.extract_info(lien, download=False))
+
+            entries = data.get('entries') if data else None
+            if not entries:
+                embed = discord.Embed(title="❌ Erreur", description="Impossible de trouver des titres dans cette playlist.", color=0xe74c3c)
+                await interaction.followup.send(embed=embed)
+                return
+
+            # On filtre les entrées invalides (vidéos privées, supprimées, etc.)
+            entries_valides = [e for e in entries if e and (e.get('id') or e.get('url'))]
+
+            if not entries_valides:
+                embed = discord.Embed(title="❌ Erreur", description="Aucun titre valide trouvé dans cette playlist.", color=0xe74c3c)
+                await interaction.followup.send(embed=embed)
+                return
+
+            nb_a_choisir = min(nombre, len(entries_valides))
+            titres_choisis = random.sample(entries_valides, nb_a_choisir)
+
+            if guild_id not in music_queue:
+                music_queue[guild_id] = []
+
+            for entree in titres_choisis:
+                # En mode extract_flat, 'url' contient souvent déjà l'URL de la vidéo,
+                # sinon on la reconstruit à partir de l'id
+                web_url = entree.get('url') or entree.get('webpage_url')
+                if web_url and not web_url.startswith('http'):
+                    web_url = f"https://www.youtube.com/watch?v={web_url}"
+                if not web_url and entree.get('id'):
+                    web_url = f"https://www.youtube.com/watch?v={entree['id']}"
+
+                titre = entree.get('title') or 'Titre inconnu'
+                music_queue[guild_id].append({'web_url': web_url, 'titreSon': titre, 'channel': interaction.channel, 'isloop': False})
+
+            liste_titres = "\n".join([f"• {e.get('title') or 'Titre inconnu'}" for e in titres_choisis])
+            embed = discord.Embed(
+                title="🎲 Playlist chargée !",
+                description=f"**{nb_a_choisir}** titre(s) ajouté(s) aléatoirement à la file par {author.display_name}.",
+                color=0x1abc9c
+            )
+            embed.add_field(name="Titres ajoutés", value=liste_titres[:1024], inline=False)
+            await interaction.followup.send(embed=embed)
+
+            if voice_clients[guild_id].is_playing() or voice_clients[guild_id].is_paused():
+                # Une musique tourne déjà : on précharge en arrière-plan le titre en tête de file
+                schedule_prefetch(guild_id)
+            else:
+                # Rien n'est en cours de lecture, on démarre la lecture
+                addqueue(guild_id)
+
+        except Exception as e:
+            print(e)
+            embed = discord.Embed(title="❌ Erreur", description="Lien invalide ou problème lors du chargement de la playlist.", color=0xe74c3c)
             await interaction.followup.send(embed=embed)
 
     @bot.tree.command(name="pause", description="Met en pause l'audio")
