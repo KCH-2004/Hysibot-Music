@@ -235,7 +235,7 @@ def run_bot():
 
     @bot.tree.command(name="loadplaylist", description="Charge une playlist et joue des titres aléatoires")
     @app_commands.describe(lien="Url de la playlist", nombre="Nombre de titres aléatoires à jouer (max 20)")
-    async def loadplaylist(interaction: discord.Interaction, lien: str, nombre: app_commands.Range[int, 1, 20]):
+    async def loadplaylist(interaction: discord.Interaction, lien: str, nombre: app_commands.Range[int, 2, 20]):
 
         await interaction.response.defer()
 
